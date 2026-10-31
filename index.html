@@ -27,7 +27,8 @@ dialog .btn{display:block;width:100%;margin-top:8px;background:#2a2a2a;text-alig
 </style></head><body>
 <header><div class="top"><h1>🎵 Músicas</h1><button id="cfg">⚙</button></div>
 <div class="tabs"><button id="tAll" class="on">Todas</button><button id="tFav">⭐ Favoritas</button><button id="tPl">📁 Listas</button></div>
-<label class="add">＋ Adicionar músicas do celular<input id="file" type="file" accept="audio/*" multiple hidden></label>
+<div class="tabs" style="margin-top:10px"><button id="pick">📁 Escolher pasta de músicas</button><button id="sync" hidden>🔄 Atualizar pasta</button></div>
+<label class="add" style="margin-top:8px">＋ Adicionar arquivos soltos<input id="file" type="file" accept="audio/*" multiple hidden></label><input id="dir" type="file" webkitdirectory multiple hidden>
 <div class="sr"><input id="q" class="search" type="search" placeholder="🔍 Buscar música"><select id="sort"><option value="add">Ordem adicionada</option><option value="new">Mais recentes</option><option value="name">Nome A–Z</option><option value="fav">Favoritas primeiro</option></select></div></header>
 <div id="prog" hidden style="padding:8px 16px;background:var(--card)"><small id="pt"></small><progress id="pg" value="0" style="width:100%"></progress></div>
 <div id="list"></div>
@@ -75,7 +76,7 @@ const label=s=>s.title?(s.artist?s.title+' — '+s.artist:s.title):s.name;
 const key=s=>s.name+'|'+s.blob.size;
 const mb=b=>b>=1e9?(b/1e9).toFixed(2)+' GB':(b/1e6).toFixed(1)+' MB';
 const fmt=t=>isFinite(t)?Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0'):'0:00';
-const dbOpen=()=>new Promise((ok,er)=>{const r=indexedDB.open('musicas',1);r.onupgradeneeded=()=>r.result.createObjectStore('s',{keyPath:'id',autoIncrement:true});r.onsuccess=()=>ok(r.result);r.onerror=er});
+const dbOpen=()=>new Promise((ok,er)=>{const r=indexedDB.open('musicas',2);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('s'))d.createObjectStore('s',{keyPath:'id',autoIncrement:true});if(!d.objectStoreNames.contains('h'))d.createObjectStore('h')};r.onsuccess=()=>ok(r.result);r.onerror=er});
 let db;const tx=(m,f)=>new Promise((ok,er)=>{const t=db.transaction('s',m),s=t.objectStore('s'),r=f(s);t.oncomplete=()=>ok(r.result);t.onerror=er});
 const load=async()=>{songs=await tx('readonly',s=>s.getAll());render()};
 function visible(){let v=songs;if(tab==='fav')v=v.filter(s=>s.fav);else if(tab==='pl')v=v.filter(s=>(pls[curPl]||[]).includes(s.id));
@@ -128,7 +129,7 @@ $('rep').onclick=()=>{rep=rep==='all'?'one':rep==='one'?'off':'all';saveCfg();pa
 async function readHead(b){const h=new Uint8Array(await b.slice(0,10).arrayBuffer());if(String.fromCharCode(h[0],h[1],h[2])!=='ID3')return null;return b.slice(0,Math.min(((h[6]<<21)|(h[7]<<14)|(h[8]<<7)|h[9])+10,12e6)).arrayBuffer()}
 async function tagAll(){let ch=false;for(const s of songs){if(s.tagged)continue;try{const t=parseID3(await readHead(s.blob));if(t){if(t.title)s.title=t.title;if(t.artist)s.artist=t.artist;if(t.cover)s.cover=new Blob([t.cover.bytes],{type:t.cover.mime})}}catch(e){}s.tagged=1;await tx('readwrite',st=>st.put(s));ch=true}if(ch){render();const c=songs.find(x=>x.id===curId);if(c)showNow(c)}}
 const txMany=rows=>new Promise((ok,er)=>{const t=db.transaction('s','readwrite'),s=t.objectStore('s');rows.forEach(r=>{const q=s.add(r);q.onsuccess=()=>{r.id=q.result}});t.oncomplete=ok;t.onerror=t.onabort=()=>er(t.error)});
-$('file').onchange=async e=>{const files=[...e.target.files];e.target.value='';if(!files.length)return;
+async function importFiles(files){if(!files.length)return;
  let add=0,dup=0,fail=0,wl=null;const seen=new Set(songs.map(key));
  try{wl=await navigator.wakeLock.request('screen')}catch(_){}
  $('prog').hidden=false;$('pg').max=files.length;$('pg').value=0;$('pt').textContent='Preparando '+files.length+' arquivo(s)…';
@@ -138,7 +139,22 @@ $('file').onchange=async e=>{const files=[...e.target.files];e.target.value='';i
   try{await txMany(rows);songs.push(...rows);add+=rows.length}catch(_){fail=files.length-i;break}
   const d=Math.min(i+20,files.length);$('pg').value=d;$('pt').textContent='Adicionando '+d+' de '+files.length+'…';render()}
  $('prog').hidden=true;if(wl)wl.release().catch(()=>{});render();
- alert(add+' adicionada(s)'+(dup?' • '+dup+' já existia(m)':'')+(fail?' • parou por falta de espaço ou erro; as que faltam podem ser adicionadas de novo':''))};
+ alert(add+' adicionada(s)'+(dup?' • '+dup+' já existia(m)':'')+(fail?' • parou por falta de espaço ou erro; as que faltam podem ser adicionadas de novo':''))}
+const AUD=/\.(mp3|m4a|aac|ogg|opus|wav|flac|wma)$/i;
+$('file').onchange=e=>{const f=[...e.target.files];e.target.value='';importFiles(f)};
+$('dir').onchange=e=>{const f=[...e.target.files].filter(x=>AUD.test(x.name)||(x.type||'').startsWith('audio/'));e.target.value='';f.length?importFiles(f):alert('Nenhuma música encontrada nessa pasta.')};
+async function* walk(d){for await(const [n,x] of d.entries()){if(n[0]==='.')continue;if(x.kind==='file'){if(AUD.test(n))yield x}else yield* walk(x)}}
+const hput=x=>new Promise((ok,er)=>{const t=db.transaction('h','readwrite');t.objectStore('h').put(x,'dir');t.oncomplete=ok;t.onerror=t.onabort=er});
+const hget=()=>new Promise(ok=>{try{const q=db.transaction('h').objectStore('h').get('dir');q.onsuccess=()=>ok(q.result);q.onerror=()=>ok(null)}catch(_){ok(null)}});
+let dirH=null;
+async function folderSync(d){try{if(d.queryPermission&&await d.queryPermission({mode:'read'})!=='granted'&&await d.requestPermission({mode:'read'})!=='granted'){alert('Sem permissão para ler a pasta. Toque em "Atualizar pasta" e escolha Permitir.');return}}catch(_){}
+ $('prog').hidden=false;$('pt').textContent='Procurando músicas na pasta…';$('pg').removeAttribute('value');
+ const hs=[];try{for await(const x of walk(d))hs.push(x)}catch(e){$('prog').hidden=true;alert('Não consegui ler a pasta: '+e.message);return}
+ const files=[];for(let i=0;i<hs.length;i+=50)files.push(...(await Promise.all(hs.slice(i,i+50).map(x=>x.getFile().catch(()=>null)))).filter(Boolean));
+ if(!files.length){$('prog').hidden=true;alert('Nenhuma música encontrada nessa pasta.');return}
+ await importFiles(files)}
+$('pick').onclick=async()=>{if('showDirectoryPicker' in window){try{const d=await showDirectoryPicker({id:'musicas',mode:'read',startIn:'music'});dirH=d;try{await hput(d)}catch(_){}$('sync').hidden=false;folderSync(d)}catch(e){if(e.name!=='AbortError')alert('Não consegui abrir a pasta: '+e.message)}}else $('dir').click()};
+$('sync').onclick=()=>dirH&&folderSync(dirH);
 function restore(){try{const l=JSON.parse(localStorage.getItem('last')||'null');const s=l&&songs.find(x=>x.id===l.id);if(!s)return;queue=build(s.id);qi=queue.indexOf(s.id);curId=s.id;url=URL.createObjectURL(s.blob);a.addEventListener('loadedmetadata',()=>{a.currentTime=l.t||0},{once:true});a.src=url;showNow(s);render()}catch(e){}}
 /* temporizador, espaço e backup */
 const SL=[0,15,30,45,60];
@@ -155,7 +171,7 @@ $('im').onchange=async e=>{try{const o=JSON.parse(await e.target.files[0].text()
  for(const n in o.pls||{}){pls[n]=pls[n]||[];for(const k of o.pls[n]){const s=m.get(k);if(s&&!pls[n].includes(s.id))pls[n].push(s.id)}}
  saveP();render();alert('Backup importado. Favoritas novas: '+f+'.')}catch(_){alert('Arquivo de backup inválido.')}e.target.value=''};
 paintCtl();
-dbOpen().then(d=>{db=d;load().then(()=>{restore();tagAll()})});
+dbOpen().then(d=>{db=d;load().then(()=>{restore();tagAll()});hget().then(x=>{if(x){dirH=x;$('sync').hidden=false}})});
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
 </script></body></html>
