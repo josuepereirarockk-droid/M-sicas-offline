@@ -29,6 +29,7 @@ dialog .btn{display:block;width:100%;margin-top:8px;background:#2a2a2a;text-alig
 <div class="tabs"><button id="tAll" class="on">Todas</button><button id="tFav">⭐ Favoritas</button><button id="tPl">📁 Listas</button></div>
 <label class="add">＋ Adicionar músicas do celular<input id="file" type="file" accept="audio/*" multiple hidden></label>
 <div class="sr"><input id="q" class="search" type="search" placeholder="🔍 Buscar música"><select id="sort"><option value="add">Ordem adicionada</option><option value="new">Mais recentes</option><option value="name">Nome A–Z</option><option value="fav">Favoritas primeiro</option></select></div></header>
+<div id="prog" hidden style="padding:8px 16px;background:var(--card)"><small id="pt"></small><progress id="pg" value="0" style="width:100%"></progress></div>
 <div id="list"></div>
 <div id="bar"><div class="np"><img id="cov" alt="" hidden><div id="now">Nenhuma música</div></div>
 <input id="seek" type="range" min="0" max="0" value="0" step="0.1">
@@ -126,7 +127,18 @@ $('shuf').onclick=()=>{shuf=!shuf;saveCfg();paintCtl();if(curId!=null){queue=bui
 $('rep').onclick=()=>{rep=rep==='all'?'one':rep==='one'?'off':'all';saveCfg();paintCtl()};
 async function readHead(b){const h=new Uint8Array(await b.slice(0,10).arrayBuffer());if(String.fromCharCode(h[0],h[1],h[2])!=='ID3')return null;return b.slice(0,Math.min(((h[6]<<21)|(h[7]<<14)|(h[8]<<7)|h[9])+10,12e6)).arrayBuffer()}
 async function tagAll(){let ch=false;for(const s of songs){if(s.tagged)continue;try{const t=parseID3(await readHead(s.blob));if(t){if(t.title)s.title=t.title;if(t.artist)s.artist=t.artist;if(t.cover)s.cover=new Blob([t.cover.bytes],{type:t.cover.mime})}}catch(e){}s.tagged=1;await tx('readwrite',st=>st.put(s));ch=true}if(ch){render();const c=songs.find(x=>x.id===curId);if(c)showNow(c)}}
-$('file').onchange=async e=>{let add=0,dup=0;for(const f of e.target.files){const n=f.name.replace(/\.[^.]+$/,'');if(Q.dup(songs,n,f.size)){dup++;continue}const row={name:n,blob:f,fav:false};row.id=await tx('readwrite',s=>s.add(row));songs.push(row);add++}e.target.value='';await load();alert(add+' adicionada(s)'+(dup?' • '+dup+' já existia(m)':''));tagAll()};
+const txMany=rows=>new Promise((ok,er)=>{const t=db.transaction('s','readwrite'),s=t.objectStore('s');rows.forEach(r=>{const q=s.add(r);q.onsuccess=()=>{r.id=q.result}});t.oncomplete=ok;t.onerror=t.onabort=()=>er(t.error)});
+$('file').onchange=async e=>{const files=[...e.target.files];e.target.value='';if(!files.length)return;
+ let add=0,dup=0,fail=0,wl=null;const seen=new Set(songs.map(key));
+ try{wl=await navigator.wakeLock.request('screen')}catch(_){}
+ $('prog').hidden=false;$('pg').max=files.length;$('pg').value=0;$('pt').textContent='Preparando '+files.length+' arquivo(s)…';
+ for(let i=0;i<files.length;i+=20){const part=[];
+  for(const f of files.slice(i,i+20)){const n=f.name.replace(/\.[^.]+$/,'');const k=n+'|'+f.size;if(seen.has(k)){dup++;continue}seen.add(k);part.push({f,n})}
+  const rows=await Promise.all(part.map(async({f,n})=>{const row={name:n,blob:f,fav:false,tagged:1};try{const t=parseID3(await readHead(f));if(t){if(t.title)row.title=t.title;if(t.artist)row.artist=t.artist;if(t.cover)row.cover=new Blob([t.cover.bytes],{type:t.cover.mime})}}catch(_){}return row}));
+  try{await txMany(rows);songs.push(...rows);add+=rows.length}catch(_){fail=files.length-i;break}
+  const d=Math.min(i+20,files.length);$('pg').value=d;$('pt').textContent='Adicionando '+d+' de '+files.length+'…';render()}
+ $('prog').hidden=true;if(wl)wl.release().catch(()=>{});render();
+ alert(add+' adicionada(s)'+(dup?' • '+dup+' já existia(m)':'')+(fail?' • parou por falta de espaço ou erro; as que faltam podem ser adicionadas de novo':''))};
 function restore(){try{const l=JSON.parse(localStorage.getItem('last')||'null');const s=l&&songs.find(x=>x.id===l.id);if(!s)return;queue=build(s.id);qi=queue.indexOf(s.id);curId=s.id;url=URL.createObjectURL(s.blob);a.addEventListener('loadedmetadata',()=>{a.currentTime=l.t||0},{once:true});a.src=url;showNow(s);render()}catch(e){}}
 /* temporizador, espaço e backup */
 const SL=[0,15,30,45,60];
