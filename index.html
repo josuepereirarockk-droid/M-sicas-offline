@@ -105,6 +105,7 @@ dialog textarea{display:block;width:100%;margin-top:4px;background:var(--c2);col
 <label>Visualizador de áudio (tela cheia)<select id="vzs"><option value="0">Desligado</option><option value="1">Ligado</option></select></label>
 <label>Transição entre músicas<select id="xfs"><option value="0">Sem transição</option><option value="3">3 segundos</option><option value="6">6 segundos</option><option value="10">10 segundos</option></select></label>
 <label>Velocidade<select id="spds"><option value="0.75">0,75x</option><option value="1">1x (normal)</option><option value="1.25">1,25x</option><option value="1.5">1,5x</option><option value="2">2x</option></select></label>
+<label>Baixar por link (arquivo de áudio direto, um link por linha)<textarea id="lk" rows="3" placeholder="https://site.com/musica.mp3"></textarea></label><button id="lkb" class="btn">⬇ Baixar e adicionar</button><small>Funciona com links diretos de arquivos de áudio (.mp3, .m4a, .flac…) de sites que liberam o download. Links do YouTube, Spotify e similares não funcionam. Se você já escolheu uma pasta, o app tenta salvar a música nela também.</small>
 <button id="stb" class="btn">📊 Estatísticas</button><button id="dpb" class="btn">🧹 Limpar músicas duplicadas</button><button id="sl" class="btn"></button><button id="ex" class="btn">⬇ Exportar favoritas, listas e contagens</button><label class="btn" style="color:var(--tx);font-size:14px;margin-top:8px">⬆ Importar backup<input id="im" type="file" accept=".json,application/json" hidden></label>
 <small>O backup guarda favoritas, listas e contagens, não as músicas. Para restaurar, adicione as músicas de novo e importe.</small><button class="btn" onclick="this.closest('dialog').close()">Fechar</button></dialog>
 <dialog id="dm"><h3 id="mt"></h3><div id="mb"></div><button class="btn" onclick="this.closest('dialog').close()">Fechar</button></dialog>
@@ -401,6 +402,33 @@ function showDups(){const g={};songs.forEach(s=>{const k=Q.dupKey(s.title||s.nam
  $('dd').showModal()}
 $('drm').onclick=async()=>{const ids=[...$('dbody').querySelectorAll('input:checked')].map(c=>+c.dataset.id);if(!ids.length)return;if(!confirm('Remover '+ids.length+' música(s) duplicada(s)?'))return;await removeSongs(ids);$('dd').close();toast(ids.length+' removida(s)')};
 $('stb').onclick=()=>{$('dc').close();showStats()};$('dpb').onclick=()=>{$('dc').close();showDups()};
+/* baixar por link */
+const EXT={'audio/mpeg':'.mp3','audio/mp3':'.mp3','audio/mp4':'.m4a','audio/x-m4a':'.m4a','audio/aac':'.aac','audio/ogg':'.ogg','audio/opus':'.opus','audio/flac':'.flac','audio/x-flac':'.flac','audio/wav':'.wav','audio/x-wav':'.wav'};
+const BLOCK=/(^|\.)(youtube\.com|youtu\.be|spotify\.com|soundcloud\.com|deezer\.com|tidal\.com|music\.apple\.com|tiktok\.com|instagram\.com|facebook\.com)$/i;
+async function askRW(){if(!dirH||!dirH.requestPermission)return false;try{return await dirH.queryPermission({mode:'readwrite'})==='granted'||await dirH.requestPermission({mode:'readwrite'})==='granted'}catch(_){return false}}
+async function saveToDir(f){try{const fh=await dirH.getFileHandle(f.name,{create:true}),w=await fh.createWritable();await w.write(f);await w.close();return true}catch(_){return false}}
+function nameFrom(res,url,type){let n='';const m=/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(res.headers.get('content-disposition')||'');if(m)try{n=decodeURIComponent(m[1])}catch(_){n=m[1]}
+ if(!n)try{n=decodeURIComponent(url.pathname.split('/').filter(Boolean).pop()||'')}catch(_){}
+ n=(n||'musica').replace(/[\\/:*?"<>|]/g,'_').trim();if(!AUD.test(n))n+=(EXT[type]||'.mp3');return n}
+async function fromLinks(){const urls=$('lk').value.split(/\s+/).map(x=>x.trim()).filter(Boolean);if(!urls.length){toast('Cole pelo menos um link');return}
+ const canSave=await askRW();$('dc').close();const files=[],fails=[];let saved=0;$('prog').hidden=false;
+ for(let k=0;k<urls.length;k++){const u=urls[k];$('pg').removeAttribute('value');$('pt').textContent='Baixando '+(k+1)+' de '+urls.length+'…';
+  try{const url=new URL(u);if(!/^https?:$/.test(url.protocol))throw 0;
+   if(BLOCK.test(url.hostname)){fails.push(u+' — site de streaming (não permite baixar)');continue}
+   const res=await fetch(url);if(!res.ok){fails.push(u+' — erro '+res.status);continue}
+   const type=(res.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
+   if(/text\/html|application\/json/.test(type)){fails.push(u+' — não é um arquivo de áudio (é uma página)');continue}
+   const len=+res.headers.get('content-length')||0;if(len>3e8){fails.push(u+' — arquivo grande demais');continue}
+   if(len){$('pg').max=len;$('pg').value=0}
+   const ch=[];let got=0;const rd=res.body.getReader();for(;;){const{done,value}=await rd.read();if(done)break;ch.push(value);got+=value.length;if(len)$('pg').value=got;if(got>3e8)throw 0}
+   if(got<10240){fails.push(u+' — arquivo pequeno demais para ser uma música');continue}
+   const f=new File(ch,nameFrom(res,url,type),{type:type.startsWith('audio/')?type:'audio/mpeg'});files.push(f);if(canSave&&await saveToDir(f))saved++}
+  catch(e){fails.push(u+' — não consegui baixar (o site pode não permitir download direto pelo app)')}}
+ $('prog').hidden=true;if(files.length)await importFiles(files);
+ if(fails.length)alert('Não deu certo para:\n'+fails.join('\n')+'\n\nDica: abra o link no navegador, baixe o arquivo e use "Adicionar arquivos soltos" ou "Atualizar pasta".');
+ else if(saved)toast(saved+' música(s) também salva(s) na pasta');else if(dirH&&files.length)toast('Adicionada ao app (sem permissão para salvar na pasta)');
+ $('lk').value=''}
+$('lkb').onclick=fromLinks;
 applyTheme();applyVol();applyRate();paintIcons();paintCfg();
 dbOpen().then(d=>{db=d;load().then(()=>{restore();tagAll()});hget().then(x=>{if(x){dirH=x;$('sync').hidden=false}})});
 if('serviceWorker' in navigator){const had=!!navigator.serviceWorker.controller;let rl=false;

@@ -1,4 +1,4 @@
-const C='musicas-v8',F=['./','index.html','manifest.json','icon.svg','icon-192.png','icon-512.png'];
+const C='musicas-v9',F=['./','index.html','manifest.json','icon.svg','icon-192.png','icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(F)))});
 self.addEventListener('message',e=>{if(e.data==='skip')self.skipWaiting()});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>clients.claim())));
