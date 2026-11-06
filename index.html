@@ -151,7 +151,7 @@ html.nar header{position:static}
 <label>🔊 Volume <input id="vol2" type="range" min="0" max="1" step="0.01" value="1"></label><small>No celular, use também os botões de volume do aparelho.</small>
 <label>Tema<select id="thm"><option value="auto">Automático</option><option value="dark">Escuro</option><option value="light">Claro</option><option value="butterfly">Borboletas roxas</option><option value="city">Cidade neon</option></select></label>
 <label id="swl">Cor de destaque<div class="sw" id="sw"></div></label>
-<label>Tamanho do texto<select id="fsz"><option value="1">Normal</option><option value="1.15">Grande</option><option value="1.3">Extra grande</option><option value="1.5">Enorme</option></select></label><small id="fitinfo"></small>
+<label>Tamanho do texto: <b id="fszv"></b><select id="fsz"><option value="0.78">Muito pequeno</option><option value="0.9">Pequeno</option><option value="1">Normal</option><option value="1.15">Grande</option><option value="1.3">Extra grande</option><option value="1.5">Enorme</option><option value="custom">Personalizado</option></select><input id="fsr" type="range" min="0.6" max="1.6" step="0.05" value="1"></label><small id="fitinfo"></small>
 <label><input id="carm" type="checkbox"> Modo carro (botões grandes)</label>
 <label>Equalizador<select id="eqs"><option value="off">Desligado</option><option value="bass">Reforço de graves</option><option value="voice">Voz</option><option value="treble">Agudos</option><option value="rock">Rock</option><option value="custom">Personalizado</option></select></label>
 <small>Se o som falhar com a tela apagada, volte para "Desligado" e reabra o app.</small>
@@ -212,8 +212,8 @@ function parseLRC(txt){const out=[];for(const ln of txt.split(/\r?\n/)){const ts
 /*END*/
 const $=id=>document.getElementById(id);
 let a=$('a'),b=new Audio();[a,b].forEach(x=>{x._f=1;x.preload='auto'});
-let songs=[],tab='all',cur=null,queue=[],qi=-1,curId=null,term='',shuf=false,rep='all',sort='add',vol=1,muted=false,xf=0,eq='off',theme='auto',acc='#c026d3',spd=1,lim=150,selMode=false,sel=new Set(),lastSave=0,sleepAt=0,sleepIdx=0,counted=false,pls={},st={},fading=null,db,dirH=null,cv=null,lpDone=false,ctx=null,flt=[],an=null,eqv=[0,0,0],viz=false,showLy=true,hasLy=false,lrcArr=null,lyIdx=-1,lastT=0,rt={},sm={},tl={t:0,m:{}},pos={},raf=0,want=false,wd=0,car=false,fs=1.15,dmf=1;
-try{const c=JSON.parse(localStorage.getItem('cfg')||'{}');shuf=!!c.shuf;rep=c.rep||rep;sort=c.sort||sort;if(c.vol!=null)vol=c.vol;xf=c.xf||0;eq=c.eq||'off';theme=c.theme||'auto';acc=['#c026d3','#22d3ee','#f472b6','#4ade80','#fb923c'].includes(c.acc)?c.acc:acc;spd=c.spd||1;eqv=c.eqv||eqv;viz=!!c.viz;car=!!c.car;if(c.fs)fs=c.fs;pls=JSON.parse(localStorage.getItem('pls')||'{}');st=JSON.parse(localStorage.getItem('st')||'{}')}catch(e){}
+let songs=[],tab='all',cur=null,queue=[],qi=-1,curId=null,term='',shuf=false,rep='all',sort='add',vol=1,muted=false,xf=0,eq='off',theme='auto',acc='#c026d3',spd=1,lim=150,selMode=false,sel=new Set(),lastSave=0,sleepAt=0,sleepIdx=0,counted=false,pls={},st={},fading=null,db,dirH=null,cv=null,lpDone=false,ctx=null,flt=[],an=null,eqv=[0,0,0],viz=false,showLy=true,hasLy=false,lrcArr=null,lyIdx=-1,lastT=0,rt={},sm={},tl={t:0,m:{}},pos={},raf=0,want=false,wd=0,car=false,fs=1,fsc=false,dmf=1;
+try{const c=JSON.parse(localStorage.getItem('cfg')||'{}');shuf=!!c.shuf;rep=c.rep||rep;sort=c.sort||sort;if(c.vol!=null)vol=c.vol;xf=c.xf||0;eq=c.eq||'off';theme=c.theme||'auto';acc=['#c026d3','#22d3ee','#f472b6','#4ade80','#fb923c'].includes(c.acc)?c.acc:acc;spd=c.spd||1;eqv=c.eqv||eqv;viz=!!c.viz;car=!!c.car;fsc=!!c.fsc;if(c.fs&&fsc)fs=c.fs;pls=JSON.parse(localStorage.getItem('pls')||'{}');st=JSON.parse(localStorage.getItem('st')||'{}')}catch(e){}
 const ld=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};rt=ld('rt',{});sm=ld('sm',{});tl=ld('tl',{t:0,m:{}});pos=ld('pos',{});
 const TABS=[['all','Todas'],['fav','⭐ Favoritas'],['pl','📁 Listas'],['art','🎤 Artistas'],['alb','💿 Álbuns'],['top','🔥 Mais ouvidas'],['rec','🕘 Recentes'],['new','🆕 Novas'],['nev','🙈 Nunca tocadas'],['rt','🏅 Avaliadas']],ICON={pl:'📁',art:'🎤',alb:'💿'},SPD=[0.75,1,1.25,1.5,2],ACC=['#c026d3','#22d3ee','#f472b6','#4ade80','#fb923c'];
 const ico=(p,f)=>'<svg viewBox="0 0 24 24" fill="'+(f?'currentColor':'none')+'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
@@ -224,7 +224,7 @@ function paintIcons(){$('shuf').innerHTML=ico(I.shuf);$('prev').innerHTML=ico(I.
 const PH='data:image/svg+xml,'+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='#333'/><text x='32' y='44' font-size='32' text-anchor='middle'>🎵</text></svg>");
 const norm=s=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const lsSet=(k,v)=>{try{localStorage.setItem(k,typeof v==='string'?v:JSON.stringify(v))}catch(e){}};
-const saveCfg=()=>lsSet('cfg',{shuf,rep,sort,vol,xf,eq,theme,acc,spd,eqv,viz,car,fs}),saveP=()=>lsSet('pls',pls),saveSt=()=>lsSet('st',st);
+const saveCfg=()=>lsSet('cfg',{shuf,rep,sort,vol,xf,eq,theme,acc,spd,eqv,viz,car,fs,fsc}),saveP=()=>lsSet('pls',pls),saveSt=()=>lsSet('st',st);
 const saveLast=()=>{if(curId!=null){lsSet('last',{id:curId,t:a.currentTime});if(a.duration>900){pos[curId]=a.currentTime;lsSet('pos',pos)}}};
 const art=s=>{const x=(s.artist||'').trim();return /^(none|null|undefined|unknown|desconhecido)$/i.test(x)?'':x};
 const label=s=>{const t=s.title||s.name,x=art(s);return x?t+' — '+x:t};
@@ -240,7 +240,7 @@ function applyTheme(){const l=theme==='light'||(theme==='auto'&&matchMedia('(pre
  R.dataset.theme=t?theme:(l?'light':'dark');R.classList.toggle('side',t);R.classList.toggle('car',car);if(t)R.style.removeProperty('--ac');else R.style.setProperty('--ac',acc);
  document.querySelector('meta[name=theme-color]').content=l?'#f3f1fb':(theme==='butterfly'?'#07031a':'#05050f');const w=$('swl');if(w)w.hidden=t}
 function paintVol(){const v=muted?0:vol;$('mute').innerHTML=ico(v===0?I.mute:I.vol);$('vol').value=v;$('vol2').value=v;$('vol').style.setProperty('--p',v*100+'%')}
-function paintCfg(){$('shuf').className=shuf?'on':'';$('rep').className=rep==='off'?'':'on';$('rep').innerHTML=ico(rep==='one'?I.rep1:I.rep);$('sort').value=sort;$('thm').value=theme;$('eqs').value=eq;$('xfs').value=String(xf);$('spds').value=String(spd);$('spd').textContent=spd+'x';{const g=eq==='custom'?eqv:(PRE[eq]||PRE.off);[0,1,2].forEach(i=>$('eq'+i).value=g[i]);$('vzs').value=viz?'1':'0'}$('carm').checked=car;$('fsz').value=String(fs);paintVol();
+function paintCfg(){$('shuf').className=shuf?'on':'';$('rep').className=rep==='off'?'':'on';$('rep').innerHTML=ico(rep==='one'?I.rep1:I.rep);$('sort').value=sort;$('thm').value=theme;$('eqs').value=eq;$('xfs').value=String(xf);$('spds').value=String(spd);$('spd').textContent=spd+'x';{const g=eq==='custom'?eqv:(PRE[eq]||PRE.off);[0,1,2].forEach(i=>$('eq'+i).value=g[i]);$('vzs').value=viz?'1':'0'}$('carm').checked=car;paintFs();paintVol();
  $('sw').innerHTML='';ACC.forEach(c=>{const x=document.createElement('button');x.style.background=c;x.className=c===acc?'on':'';x.setAttribute('aria-label','Cor '+c);x.onclick=()=>{acc=c;applyTheme();saveCfg();paintCfg()};$('sw').appendChild(x)})}
 const applyVol=()=>[a,b].forEach(x=>x.volume=Math.max(0,Math.min(1,(muted?0:vol)*x._f)));
 const applyRate=()=>[a,b].forEach(x=>{x.defaultPlaybackRate=spd;x.playbackRate=spd});
@@ -481,7 +481,9 @@ function fit(){const R=document.documentElement,lw=R.clientWidth||innerWidth,dw=
  R.classList.toggle('nar',ew<=600);R.classList.toggle('med',ew>=760);R.classList.toggle('wide',ew>=1000);
  const fi=$('fitinfo');if(fi)fi.textContent=dmf>1?'Seu navegador está mostrando o app numa tela larga (modo computador ou zoom reduzido). O app ajustou o tamanho sozinho. Para ficar ainda melhor, desligue "Site para computador" no menu ⋮ do Chrome.':''}
 addEventListener('resize',fit);
-$('fsz').onchange=e=>{fs=+e.target.value;fit();saveCfg()};
+function paintFs(){$('fsz').value=[0.78,0.9,1,1.15,1.3,1.5].includes(fs)?String(fs):'custom';$('fsr').value=fs;$('fszv').textContent=Math.round(fs*100)+'%'}
+$('fsz').onchange=e=>{if(e.target.value==='custom')return;fs=+e.target.value;fsc=true;fit();saveCfg();paintFs()};
+$('fsr').oninput=e=>{fs=Math.round(+e.target.value*100)/100;fsc=true;fit();saveCfg();paintFs()};
 fit();applyTheme();applyVol();applyRate();paintIcons();paintCfg();if(dmf>1.3&&!localStorage.getItem('fitmsg')){lsSet('fitmsg','1');setTimeout(()=>toast('Ajustei o tamanho do app para a sua tela'),900)}
 dbOpen().then(d=>{db=d;load().then(()=>{restore();tagAll();handleHash()});hget().then(x=>{if(x){dirH=x;$('sync').hidden=false}})});
 if('serviceWorker' in navigator){const had=!!navigator.serviceWorker.controller;let rl=false;
