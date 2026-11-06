@@ -1,4 +1,4 @@
-const C='musicas-v12',F=['./','index.html','manifest.json','icon.svg','icon-192.png','icon-512.png','icon-maskable-512.png','apple-touch-icon.png','bg-butterfly.jpg','bg-city-top.jpg','bg-city-char.jpg'];
+const C='musicas-v13',F=['./','index.html','manifest.json','icon.svg','icon-192.png','icon-512.png','icon-maskable-512.png','apple-touch-icon.png','bg-butterfly.jpg','bg-city-top.jpg','bg-city-char.jpg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(F)))});
 self.addEventListener('message',e=>{if(e.data==='skip')self.skipWaiting()});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>clients.claim())));
