@@ -1,0 +1,12 @@
+MÚSICAS (PWA offline)
+
+PARA O APP FUNCIONAR (suba estes arquivos no GitHub, na raiz do repositório):
+  index.html  sw.js  manifest.json  tags.js  tags-worker.js
+  icon.svg  icon-192.png  icon-512.png  icon-maskable-512.png  apple-touch-icon.png
+  bg-butterfly.jpg  bg-city-top.jpg  bg-city-char.jpg
+
+OPCIONAL (código-fonte em TypeScript, só para quem quer editar):
+  src/tags.ts  src/tags-worker.ts  tsconfig.json
+  Para recompilar tags.js e tags-worker.js:  npm i -D typescript  &&  npx tsc -p .
+
+Depois de enviar, abra o app e toque em "Nova versão disponível".
