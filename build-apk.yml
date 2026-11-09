@@ -1,46 +1,35 @@
 name: Gerar APK
-
 on:
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   apk:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
     steps:
-      - name: Baixar arquivos do projeto
-        uses: actions/checkout@v4
-
-      - name: Configurar Java
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - name: Conferir arquivos
+        run: ls -la
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v4
-
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-
       - name: Gerar o projeto Android
         run: python3 make_android.py
-
       - name: Compilar o APK
-        run: gradle -p android assembleDebug --no-daemon
-
-      - name: Salvar APK
+        run: gradle -p android assembleDebug --no-daemon --stacktrace
+      - name: Guardar o APK
         uses: actions/upload-artifact@v4
         with:
           name: musicas-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-
       - name: Publicar na aba Releases
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}

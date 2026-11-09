@@ -464,11 +464,18 @@ public class PlaybackService extends Service {
 '''
 
 def main():
-    for f in WEB:
-        if not os.path.exists(f):
-            sys.exit('Arquivo do app não encontrado: ' + f)
+    print('Pasta atual:', os.getcwd())
+    print('Arquivos na raiz do repositório:', sorted(x for x in os.listdir('.') if os.path.isfile(x)))
+    if not os.path.exists('index.html'):
+        sys.exit('ERRO: index.html não está na raiz do repositório. Suba os arquivos do app na raiz (não dentro de pasta).')
+    faltando = [f for f in WEB if not os.path.exists(f)]
+    if faltando:
+        print('AVISO: estes arquivos do app não estão na raiz do repositório e ficarão de fora do APK:', faltando)
+    tem_icone = os.path.exists('icon-192.png')
     shutil.rmtree(ROOT, ignore_errors=True)
     for path, content in FILES.items():
+        if path.endswith('AndroidManifest.xml') and not tem_icone:
+            content = content.replace('        android:icon="@mipmap/ic_launcher"\n', '')
         full = os.path.join(ROOT, path)
         os.makedirs(os.path.dirname(full), exist_ok=True)
         with open(full, 'w', encoding='utf-8') as fh:
@@ -476,12 +483,14 @@ def main():
     www = os.path.join(ROOT, 'app/src/main/assets/www')
     os.makedirs(www, exist_ok=True)
     for f in WEB:
-        shutil.copy(f, os.path.join(www, f))
-    for d in ('mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi'):
-        out = os.path.join(ROOT, 'app/src/main/res/mipmap-' + d)
-        os.makedirs(out, exist_ok=True)
-        shutil.copy('icon-192.png', os.path.join(out, 'ic_launcher.png'))
-    print('Projeto Android gerado em', ROOT)
+        if os.path.exists(f):
+            shutil.copy(f, os.path.join(www, f))
+    if tem_icone:
+        for d in ('mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi'):
+            out = os.path.join(ROOT, 'app/src/main/res/mipmap-' + d)
+            os.makedirs(out, exist_ok=True)
+            shutil.copy('icon-192.png', os.path.join(out, 'ic_launcher.png'))
+    print('Projeto Android gerado em', ROOT, '- arquivos do app no APK:', sorted(os.listdir(www)))
 
 if __name__ == '__main__':
     main()
